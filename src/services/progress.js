@@ -78,7 +78,16 @@ export async function takeSnapshots() {
     await recordEvent({ uuid: m.uuid, username: m.username, type: 'raid', qty: dRaids, meta, at: now });
     await recordEvent({ uuid: m.uuid, username: m.username, type: 'guildRaid', qty: dGuildRaids, meta, at: now });
     await recordEvent({ uuid: m.uuid, username: m.username, type: 'contribution', qty: dContrib, meta, at: now });
-    await recordEvent({ uuid: m.uuid, username: m.username, type: 'weekly', qty: dWeekly, meta, at: now });
+    // A sequência viaja no evento: o bônus de streak é recalculado a partir dela
+    // sempre que os pesos mudarem, como todo o resto do histórico.
+    await recordEvent({
+      uuid: m.uuid,
+      username: m.username,
+      type: 'weekly',
+      qty: dWeekly,
+      meta: { ...meta, streak: metrics.weeklyStreak },
+      at: now,
+    });
 
     await stats.updateOne(
       { uuid: m.uuid },

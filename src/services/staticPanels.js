@@ -26,15 +26,23 @@ function row(buttons) {
 
 const COLOR = { rules: 0x5865f2, guild: 0x2ecc71, pings: 0xe67e22, recruit: 0x3498db, war: 0xe74c3c, tome: 0x9b59b6, loan: 0xf1c40f };
 
+/** IDs fixos referenciados nos textos da staff. @type {string} */
 const STAFF_ROLE = '1262574400587169863';
-const MEMBER_ROLE = '1262796467488165908';
 const RECRUIT_CHANNEL = '1309848293278486578';
 const BOT_ID = '1285402380648583199';
 
 // Menções cruas nunca pingam ninguém num painel fixo.
 const SILENT = { allowedMentions: { parse: [] } };
 
-function rulesPayload() {
+/** @param {import('../config/guildConfig.js').GuildParams} params */
+function rulesPayload(params) {
+  const w = params.pointsWeights;
+  const base = params.inactivityDays;
+  const per = params.inactivityForgivenessPerPoints;
+  const maxDays = params.inactivityForgivenessMaxDays;
+  const streakPct = Math.round(params.weeklyStreakBonusPerWeek * 100);
+  const exemplo = base + Math.min(maxDays, Math.floor(1000 / per));
+
   return {
     ...SILENT,
     embeds: [
@@ -84,22 +92,32 @@ function rulesPayload() {
         description:
 `Nossa guilda segue uma dinâmica simples e inclusiva. Aqui estão os pontos principais para mantermos organização e harmonia:
 
-## 1. Inatividade e Expulsão
-> - Usamos o bot <@${BOT_ID}> para monitorar registros de inatividade.
-> - Membros que ficarem **7 dias offline** serão removidos, exceto em casos específicos:
->   - Para cada **100 milhões de Guild XP** farmados, você ganha **+1 dia** de margem.
->   - Exemplo: farmou 1 bilhão de XP? São 7 dias + 10 dias extras de perdão.
-> - **Expulsão por inatividade não é banimento.** Você pode voltar quando quiser, refazendo o processo em <#${RECRUIT_CHANNEL}>.
+## 1. Pontos de Contribuição
+Tudo que você faz pela guilda vira ponto. Os pontos definem a **fila de Tomes** e a sua **margem de inatividade**.
 
-## 2. Guild Bank
-> - O Guild Bank é público e aberto para todos. Pegue o que precisar, mas observe:
->   - **Scrolls** e **Ferramentas** devem ser devolvidos após o uso.
->   - Pegou? Certifique-se de devolver!
+> \`1.000.000\` de Guild XP → **${w.contribPerMillion} ponto**
+> \`1\` Guild Raid → **${w.guildRaid} pontos**, para cada membro do grupo
+> \`1\` Guerra → **${w.war} pontos**, multiplicados pelas fronteiras que o defensor tinha
+> \`1\` Objetivo Semanal → **${w.weekly} pontos**, +${streakPct}% por semana seguida (até o dobro)
 
-## 3. Participação em Atividades da Guilda
-> - **Raids de Guilda:** geram benefícios coletivos para toda a guilda, como buffs e recompensas compartilhadas.
-> - **Guerras de Guilda:** melhoram o ranking e garantem territórios, que dão bônus a todos os membros.
-> - **Farm em Grupo:** aumenta a interação, acelera o progresso e rende troca de dicas.
+Veja o seu com \`/points show\` e o ranking com \`/leaderboard\`.
+
+## 2. Inatividade e Expulsão
+> Membros que ficarem **${base} dias offline** podem ser removidos.
+> **Quem contribui ganha margem:** a cada **${per} pontos**, você ganha **+1 dia** de perdão, até **+${maxDays} dias**.
+> Exemplo: 1000 pontos = ${base} + ${Math.min(maxDays, Math.floor(1000 / per))} = **${exemplo} dias** de tolerância.
+> O bot <@${BOT_ID}> calcula isso sozinho. Ninguém precisa pedir.
+
+**Expulsão por inatividade não é banimento.** Você pode voltar quando quiser, refazendo o processo em <#${RECRUIT_CHANNEL}>.
+
+## 3. Guild Bank
+> O Guild Bank é público e aberto para todos. Pegue o que precisar.
+> **Scrolls** e **Ferramentas** devem ser devolvidos após o uso. Pegou? Devolva!
+
+## 4. Participação em Atividades da Guilda
+> **Guild Raids:** geram benefícios coletivos, buffs e recompensas compartilhadas.
+> **Guerras:** melhoram o ranking e garantem territórios, que dão bônus a todos.
+> **Farm em Grupo:** aumenta a interação, acelera o progresso e rende troca de dicas.
 
 **Dúvidas ou sugestões?** Procure um membro da <@&${STAFF_ROLE}>. Estamos aqui para ajudar!`,
       },
@@ -208,7 +226,6 @@ Dúvidas? Mencione um <@&${STAFF_ROLE}>. Estamos prontos para ajudar.`,
 function warApplicationPayload() {
   return {
     ...SILENT,
-    content: `|| <@&${MEMBER_ROLE}> ||`,
     embeds: [
       {
         title: '🛡️ Processo de Aplicação para Guerra',
@@ -256,7 +273,6 @@ function warApplicationPayload() {
 function tomePayload() {
   return {
     ...SILENT,
-    content: `|| <@&${MEMBER_ROLE}> ||`,
     embeds: [
       {
         title: '📜 Distribuição de Tomes',
@@ -265,11 +281,11 @@ function tomePayload() {
 `Regras e requisitos para receber o **Guild Tome**.
 
 ### Requisitos
-> - Ter pelo menos uma classe de nível \`105\`.
-> - Ter completado a quest \`Realm of Light I - The Worm Holes\`.
-> - Ser membro da guilda há pelo menos \`1 semana\`.
->
-> Todos são exigências do próprio jogo para usar Tomes de Guilda.
+> Ter pelo menos uma classe de nível \`105\`.
+> Ter completado a quest \`Realm of Light I - The Worm Holes\`.
+> Ser membro da guilda há pelo menos \`1 semana\`.
+
+Todos são exigências do próprio jogo para usar Tomes de Guilda.
 
 ### Como a guilda consegue Tomes?
 > **Buff de Território** — territórios conquistados em guerra (\`/guild attack\`) podem ter o buff *Tome Seeking*, que dá chance de encontrar Tomes exclusivos por hora.
@@ -277,11 +293,11 @@ function tomePayload() {
 > **Recompensa de Season** — territórios geram \`Season Rating\` por hora, e a temporada paga recompensas ao final.
 
 ### Como solicito meu Tome?
-> Clique em **Entrar na fila** abaixo. O botão já te diz sua posição.
->
-> **A fila é ordenada por pontos de contribuição**, não por ordem de chegada. Guerras, guild raids, objetivos semanais e Guild XP contam — quem mais ajuda a guilda recebe primeiro.
->
-> Mesmo que seu Tome tenha atributos baixos, aguarde **30 dias** após receber um antes de pedir outro. Outros membros também precisam.
+Clique em **Entrar na fila** abaixo. O botão já te diz sua posição.
+
+**A fila é ordenada por pontos de contribuição**, não por ordem de chegada. Guerras, guild raids, objetivos semanais e Guild XP contam — quem mais ajuda a guilda recebe primeiro.
+
+Mesmo que seu Tome tenha atributos baixos, aguarde **30 dias** após receber um antes de pedir outro. Outros membros também precisam.
 
 -# Para receber, vá em Bússola ➜ Bandeira ➜ Chave ➜ Maçã Dourada.`,
       },
@@ -291,6 +307,7 @@ function tomePayload() {
         { id: 'tome:join', label: 'Entrar na fila', emoji: '📜', style: ButtonStyle.Success },
         { id: 'tome:leave', label: 'Sair da fila', emoji: '🚪', style: ButtonStyle.Danger },
         { id: 'tome:queue', label: 'Ver fila', emoji: '📋' },
+        { id: 'tome:deliver', label: 'Entregar Tome', emoji: '🎁', style: ButtonStyle.Primary },
       ]),
     ],
   };
@@ -311,65 +328,49 @@ function loanPayload() {
 Reservamo-nos o direito de negar empréstimo a jogadores desconhecidos ou inativos. Não leve a mal se ninguém puder confiar em você ainda.
 
 ## Regras e Condições
-> **Solicitação:** peça a qualquer Estrategista ou superior da guilda.
->
-> **Responsabilidade:** roubar é passível de banimento no Wynncraft. Ao retirar um item, você se compromete a devolvê-lo no prazo ou pagar o valor acordado.
->
-> **Condição:** os itens devem voltar exatamente como saíram.
->
-> **Transparência:** seu nome fica na lista de empréstimos até a devolução. O não cumprimento é registrado publicamente, independentemente do motivo.
->
-> [**Wynncraft Rules**](https://forums.wynncraft.com/threads/game-forum-rules.111874/#post-3525357) — Seção 7 + Spoiler: *Information about loaning*
+**Solicitação:** peça a qualquer **Chief** ou superior da guilda.
 
--# A staff registra cada empréstimo com \`/loan new\`. Lembretes automáticos são enviados perto do vencimento.`,
-      },
-      {
-        title: '📄 Modelo de Acordo (fórum)',
-        color: COLOR.loan,
-        description:
-`Copie e preencha ao abrir o tópico do empréstimo.
+**Responsabilidade:** roubar é passível de banimento no Wynncraft. Ao retirar um item, você se compromete a devolvê-lo no prazo ou pagar o valor acordado.
 
-\`\`\`md
-# Acordo de Empréstimo: Set Completo de XP Bônus
+**Condição:** os itens devem voltar exatamente como saíram.
 
-### Itens Incluídos
-> Já protegidos com /itemlock e cedidos temporariamente:
-> ...
+**Prazo:** todo empréstimo vale **1 semana** por padrão. Devolver antes é sempre bem-vindo.
 
-### Data para Devolução
-> Até <timestamp>.
-> Devoluções antecipadas são livres. Para estender o prazo,
-> um novo acordo deve ser formalizado.
+**Transparência:** seu nome fica na lista de empréstimos até a devolução. O não cumprimento é registrado publicamente, independentemente do motivo.
 
-### Valor Estimado
-> Entre X e Y.
+[**Wynncraft Rules**](https://forums.wynncraft.com/threads/game-forum-rules.111874/#post-3525357) — Seção 7 + Spoiler: *Information about loaning*
 
-### Confirmação
-> As prints do trade estão anexadas abaixo. Quem recebe o
-> empréstimo deve confirmar a veracidade respondendo ao tópico.
-\`\`\``,
+-# Cada empréstimo vira um tópico próprio, onde a staff registra os itens. Lembretes automáticos são enviados perto do vencimento.`,
       },
     ],
     components: [
-      row([{ id: 'loan:mine', label: 'Meus empréstimos', emoji: '💰', style: ButtonStyle.Primary }]),
+      row([
+        { id: 'loan:mine', label: 'Meus empréstimos', emoji: '💰', style: ButtonStyle.Primary },
+        { id: 'loan:new', label: 'Novo empréstimo', emoji: '📄', style: ButtonStyle.Success },
+      ]),
     ],
   };
 }
 
-// key = chave de canal em CHANNEL_KEYS; stateId = documento em watcherState.
-export const PANELS = [
+/**
+ * key = chave de canal em CHANNEL_KEYS; stateId = documento em watcherState.
+ * `build` recebe os parâmetros vigentes, para que nenhum número do texto
+ * divirja do que o bot realmente aplica.
+ * @type {ReadonlyArray<{key: string, stateId: string, label: string, build: (params: object) => object}>}
+ */
+export const PANELS = Object.freeze([
   { key: 'rules', stateId: 'rulesPanel', label: 'regras', build: rulesPayload },
   { key: 'pings', stateId: 'pingsPanel', label: 'pings', build: pingsPayload },
   { key: 'recruiters', stateId: 'recruitPanel', label: 'recrutamento', build: recruitPayload },
   { key: 'warApplication', stateId: 'warApplicationPanel', label: 'aplicação war', build: warApplicationPayload },
   { key: 'tome', stateId: 'tomePanel', label: 'tomes', build: tomePayload },
   { key: 'loans', stateId: 'loanPanel', label: 'empréstimos', build: loanPayload },
-];
+]);
 
 export async function ensureStaticPanels(client, guildDiscordId) {
   const cfg = await getConfig(guildDiscordId);
   for (const p of PANELS) {
-    await ensurePanel(client, cfg.channels?.[p.key], p.stateId, p.build(), p.label);
+    await ensurePanel(client, cfg.channels?.[p.key], p.stateId, p.build(cfg.params), p.label);
   }
 }
 

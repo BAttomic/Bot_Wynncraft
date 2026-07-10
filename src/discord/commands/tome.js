@@ -1,10 +1,74 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+} from 'discord.js';
 import { collections } from '../../db/mongo.js';
 import { rankedQueue } from '../../services/tomes.js';
 import { audit } from '../../services/audit.js';
 
-/** Ações do painel fixo do canal de tomes. @type {readonly string[]} */
+/** Ações abertas a qualquer membro. @type {readonly string[]} */
 const BUTTON_ACTIONS = Object.freeze(['join', 'leave', 'queue']);
+
+/**
+ * Ranks DA GUILDA que podem entregar um Tome. "Chief ou superior".
+ * @type {readonly string[]}
+ */
+const MANAGER_GUILD_RANKS = Object.freeze(['chief', 'owner']);
+
+/** O menu de seleção do Discord aceita no máximo 25 opções. */
+const SELECT_LIMIT = 25;
+
+/**
+ * @param {import('discord.js').Interaction} interaction
+ * @returns {Promise<boolean>}
+ */
+async function isTomeManager(interaction) {
+  if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
+  const linked = await collections.members().findOne({ discordId: interaction.user.id });
+  return MANAGER_GUILD_RANKS.includes(linked?.guildRank);
+}
+
+/** Remove alguém da fila e registra a entrega. */
+async function deliverTo(interaction, uuid) {
+  const entry = await collections.tomeQueue().findOne({ uuid });
+  if (!entry) return interaction.editReply({ content: 'Essa pessoa não está mais na fila.', components: [] });
+
+  await collections.tomeQueue().deleteOne({ uuid });
+  audit(interaction.client, interaction.guildId, `📜 Tome entregue a **${entry.username}** por <@${interaction.user.id}>.`);
+  return interaction.editReply({
+    content: `Tome entregue a **${entry.username}**. Removido da fila.`,
+    components: [],
+  });
+}
+
+/** Passo 1 do botão "Entregar Tome": escolher quem recebeu. */
+async function promptDelivery(interaction) {
+  if (!(await isTomeManager(interaction))) {
+    return interaction.reply({ content: 'Apenas **Chief ou superior** pode entregar Tomes.', ephemeral: true });
+  }
+
+  const ranked = await rankedQueue();
+  if (!ranked.length) return interaction.reply({ content: 'A fila está vazia.', ephemeral: true });
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('tome:delivered')
+    .setPlaceholder('Quem recebeu o Tome?')
+    .addOptions(
+      ranked.slice(0, SELECT_LIMIT).map((r, i) => ({
+        label: r.username,
+        value: r.uuid,
+        description: `${i + 1}º na fila · ${r.points} pts`,
+      })),
+    );
+
+  return interaction.reply({
+    content: 'Selecione quem recebeu. Ele sai da fila na hora.',
+    components: [new ActionRowBuilder().addComponents(menu)],
+    ephemeral: true,
+  });
+}
 
 /** @param {import('discord.js').Interaction} interaction */
 async function joinQueue(interaction) {
@@ -75,8 +139,17 @@ export default {
 
   async handleComponent(interaction) {
     const action = interaction.customId.split(':')[1];
-    if (!BUTTON_ACTIONS.includes(action)) return;
 
+    if (action === 'deliver') return promptDelivery(interaction);
+    if (action === 'delivered') {
+      if (!(await isTomeManager(interaction))) {
+        return interaction.update({ content: 'Sem permissão.', components: [] });
+      }
+      await interaction.deferUpdate();
+      return deliverTo(interaction, interaction.values[0]);
+    }
+
+    if (!BUTTON_ACTIONS.includes(action)) return;
     await interaction.deferReply({ ephemeral: true });
     if (action === 'join') return joinQueue(interaction);
     if (action === 'leave') return leaveQueue(interaction);

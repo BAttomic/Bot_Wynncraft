@@ -261,7 +261,11 @@ export function panelPayload() {
 
 **Qual cargo você recebe**
 > 🟢 Está na **Wynn Brasil** → cargo de membro, acesso completo.
-> ⚪ Não está na guilda → cargo **neutro**. Pode se candidatar com \`/apply submit\`.
+> ⚪ Não está na guilda → cargo de comunidade. Depois é só clicar em **Enviar candidatura** no canal de recrutamento.
+
+**O que o bot passa a rastrear**
+> Seu apelido no Discord vira o seu nick, e se atualiza sozinho caso você troque de nome no jogo.
+> Guild XP, guerras, guild raids e objetivos semanais viram **pontos de contribuição**, que definem a fila de Tomes e a sua margem de inatividade. Veja com \`/points show\`.
 
 -# Só você enxerga a resposta da verificação. Este canal não aceita mensagens.`,
         footer: { text: 'Dados verificados na API oficial do Wynncraft' },

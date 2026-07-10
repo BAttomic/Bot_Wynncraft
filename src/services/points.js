@@ -17,15 +17,30 @@ import { log } from '../util/log.js';
 
 export const EVENT_TYPES = ['war', 'raid', 'guildRaid', 'weekly', 'contribution', 'territory', 'manual'];
 
-// Leaderboards de número cru, um por fonte de contribuição. `alltime` aponta
-// para o campo em guildStats; `season`, para o campo em seasonParticipation.
-export const CATEGORIES = {
+/**
+ * Leaderboards de número cru, um por fonte de contribuição.
+ * `alltime` aponta para o campo em guildStats; `season`, para o de
+ * seasonParticipation.
+ *
+ * Só entram fontes que valem ponto. Raid comum (fora de guilda) não vale nada na
+ * tabela oficial, então não tem ranking — o "leaderboard de raid" é o de GUILD
+ * RAID, e ter os dois só confundiria.
+ *
+ * @typedef {object} Category
+ * @property {string}  label
+ * @property {string}  emoji
+ * @property {string}  unit     unidade exibida ao lado do número
+ * @property {string}  alltime  campo em guildStats
+ * @property {string}  season   campo em seasonParticipation
+ * @property {boolean} [short]  abreviar números grandes (ex.: 50M)
+ * @type {Readonly<Record<string, Category>>}
+ */
+export const CATEGORIES = Object.freeze({
   war: { label: 'Guerras', emoji: '⚔️', unit: 'guerras', alltime: 'guildWars', season: 'warsFought' },
-  guildraid: { label: 'Guild Raids', emoji: '🛡️', unit: 'raids', alltime: 'guildRaids', season: 'guildRaidsDelta' },
+  guildraid: { label: 'Guild Raids', emoji: '🛡️', unit: 'guild raids', alltime: 'guildRaids', season: 'guildRaidsDelta' },
   xp: { label: 'XP contribuído', emoji: '📈', unit: 'XP', alltime: 'contributed', season: 'contributedDelta', short: true },
   weekly: { label: 'Objetivos semanais', emoji: '📅', unit: 'objetivos', alltime: 'weeklyObjectives', season: 'weeklyDelta' },
-  raid: { label: 'Raids (todas)', emoji: '🚀', unit: 'raids', alltime: 'raidsInGuild', season: 'raidsDelta' },
-};
+});
 
 export async function recordEvent({ uuid, username, type, qty, meta = null, at = new Date() }) {
   if (!qty) return null;
@@ -49,7 +64,25 @@ export async function recordEvent({ uuid, username, type, qty, meta = null, at =
   return true;
 }
 
-// Único lugar que converte quantidade em pontos.
+/**
+ * Bônus de sequência do objetivo semanal: +10% por semana consecutiva, com teto.
+ * @param {number} streak  semanas seguidas (1 = primeira)
+ * @param {object} params
+ * @returns {number} fator multiplicativo, ex.: 1.2 para streak 3
+ */
+function weeklyStreakFactor(streak, params) {
+  const per = Number(params.weeklyStreakBonusPerWeek ?? 0.1);
+  const max = Number(params.weeklyStreakBonusMax ?? 1);
+  const weeks = Math.max(1, Number(streak) || 1);
+  return 1 + Math.min(max, per * (weeks - 1));
+}
+
+/**
+ * Único lugar que converte quantidade bruta em pontos.
+ * @param {{type: string, qty: number, meta?: object}} event
+ * @param {import('../config/guildConfig.js').GuildParams} params
+ * @returns {number}
+ */
 export function eventPoints(event, params = {}) {
   const w = params.pointsWeights || {};
   switch (event.type) {
@@ -60,14 +93,20 @@ export function eventPoints(event, params = {}) {
     case 'guildRaid':
       return event.qty * (w.guildRaid || 0);
     case 'weekly':
-      return event.qty * (w.weekly || 0);
+      return event.qty * (w.weekly || 0) * weeklyStreakFactor(event.meta?.streak, params);
     case 'contribution':
       return (event.qty / 1_000_000) * (w.contribPerMillion || 0);
     case 'territory': {
-      // qty é o multiplicador CRU da captura. O teto é aplicado aqui, então
-      // mexer em territoryMultiplierCap também reescreve o histórico.
+      // `qty` é o multiplicador CRU da captura (1 + 0.3×conexões, e os externals
+      // no QG). A GUERRA já pagou a base, então aqui entra só o excedente:
+      //
+      //     guerra + território = war + territoryBase × (mult − 1)
+      //                         = war × mult          (quando as bases são iguais)
+      //
+      // Sem isso, capturar um território pagaria a base duas vezes.
       const cap = Number(params.territoryMultiplierCap) || Infinity;
-      return Math.min(event.qty, cap) * (w.territoryBase || 0);
+      const mult = Math.min(event.qty, cap);
+      return Math.max(0, mult - 1) * (w.territoryBase || 0);
     }
     case 'manual':
       // Concessão da staff já está em pontos; não tem peso a aplicar.

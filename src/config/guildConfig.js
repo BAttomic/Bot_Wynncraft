@@ -54,6 +54,8 @@ export const PARAM_KEYS = Object.freeze([
   'roleSyncMinutes',
   'pointsWeights',
   'territoryMultiplierCap',
+  'weeklyStreakBonusPerWeek',
+  'weeklyStreakBonusMax',
   'seasonMode',
   'voterRoles',
   'announcePresence',
@@ -62,6 +64,8 @@ export const PARAM_KEYS = Object.freeze([
   'loanReminderHourUTC',
   'watcherSeconds',
   'inactivityDays',
+  'inactivityForgivenessPerPoints',
+  'inactivityForgivenessMaxDays',
   'verifyHourUTC',
 ]);
 
@@ -69,13 +73,20 @@ export const PARAM_KEYS = Object.freeze([
  * Multiplicadores do sistema de pontos unificado. Nenhum evento guarda pontos:
  * o valor é sempre derivado destes pesos na hora de somar, então mudar um deles
  * reescreve todo o histórico (ver services/points.js).
+ *
+ * Tabela oficial:
+ *   1.000.000 de Guild XP  →  1 ponto
+ *   1 guild raid           →  10 pontos, para cada membro do grupo
+ *   1 guerra               →  10 pontos × multiplicador de conexões/externals
+ *   1 objetivo semanal     →  30 pontos × (1 + 10% por semana seguida, teto +100%)
+ *
  * @typedef {object} PointsWeights
- * @property {number} war                pontos por guerra
- * @property {number} raid               pontos por raid comum
- * @property {number} guildRaid          pontos por guild raid
- * @property {number} weekly             pontos por objetivo semanal concluído
+ * @property {number} war                base de uma guerra
+ * @property {number} raid               raid comum (fora de guilda); 0 = não pontua
+ * @property {number} guildRaid          por membro do grupo
+ * @property {number} weekly             base de um objetivo semanal
  * @property {number} contribPerMillion  pontos por 1.000.000 de Guild XP
- * @property {number} territoryBase      valor de uma captura ANTES do multiplicador de fronteiras
+ * @property {number} territoryBase      base sobre a qual incide o multiplicador da captura
  */
 
 /**
@@ -92,7 +103,9 @@ export const PARAM_KEYS = Object.freeze([
  * @property {number}         snapshotHourUTC       hora da apuração diária
  * @property {number}         loanReminderHourUTC   hora dos lembretes de empréstimo
  * @property {number}         watcherSeconds        frequência do poller
- * @property {number}         inactivityDays        limite para marcar inativo
+ * @property {number}         inactivityDays        limite BASE de dias offline
+ * @property {number}         inactivityForgivenessPerPoints  pontos que compram +1 dia
+ * @property {number}         inactivityForgivenessMaxDays    teto de dias de perdão
  * @property {number}         verifyHourUTC         hora do relatório de verificação
  */
 
@@ -103,15 +116,20 @@ const DEFAULT_PARAMS = Object.freeze({
   roleSyncMinutes: 10,
   pointsWeights: Object.freeze({
     war: 10,
-    raid: 5,
-    guildRaid: 15,
-    weekly: 20,
+    raid: 0, // raid comum não entra na tabela de pontuação
+    guildRaid: 10,
+    weekly: 30,
     contribPerMillion: 1,
-    territoryBase: 20,
+    // Igual ao peso da guerra de propósito: o evento de território paga só o
+    // EXCEDENTE do multiplicador, e a soma fecha em `war × multiplicador`.
+    territoryBase: 10,
   }),
   // O QG de uma guilda grande chega a x25 pela fórmula do jogo, o que sozinho
   // dominaria o ranking.
   territoryMultiplierCap: 8,
+  // Objetivo semanal: +10% por semana consecutiva, acumulando no máximo +100%.
+  weeklyStreakBonusPerWeek: 0.1,
+  weeklyStreakBonusMax: 1,
   seasonMode: 'wynn',
   // Vazio = cai no rank do jogo (Owner + Chief), o comportamento antigo.
   voterRoles: Object.freeze([]),
@@ -122,7 +140,13 @@ const DEFAULT_PARAMS = Object.freeze({
   snapshotHourUTC: 5,
   loanReminderHourUTC: 12,
   watcherSeconds: 60,
+  // Limite base de dias offline antes de o membro poder ser expulso.
   inactivityDays: 7,
+  // Cada 100 pontos compram +1 dia de perdão. Equivale à regra antiga de +1 dia
+  // por 100 milhões de Guild XP, já que 1 milhão de XP = 1 ponto — mas agora
+  // guerras, guild raids e objetivos semanais também rendem margem.
+  inactivityForgivenessPerPoints: 100,
+  inactivityForgivenessMaxDays: 30,
   verifyHourUTC: 12,
 });
 

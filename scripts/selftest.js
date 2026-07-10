@@ -98,14 +98,34 @@ async function main() {
   check('primeiro poll não anuncia nada', detectGuildRaids(null, curr).length, 0);
   check('sem mudança não anuncia nada', detectGuildRaids(prev, clone(wnbr)).length, 0);
 
-  section('6. Ordenação de cargos (peakRank)');
+  section('6. Perdão de inatividade pela contribuição');
+  const inat = await import('../src/services/inactivity.js');
+  const ip = { inactivityDays: 7, inactivityForgivenessPerPoints: 100, inactivityForgivenessMaxDays: 30 };
+
+  check('0 pontos => limite base de 7d', inat.allowanceDays(0, ip), 7);
+  check('99 pontos ainda não compram 1 dia', inat.forgivenessDays(99, ip), 0);
+  check('100 pontos => +1 dia', inat.forgivenessDays(100, ip), 1);
+  check('1000 pontos => +10 dias (7+10=17)', inat.allowanceDays(1000, ip), 17);
+  check('paridade com a regra antiga: 1B de XP = 1000 pts = +10d', inat.forgivenessDays(1000, ip), 10);
+  check('teto de 30 dias', inat.forgivenessDays(999_999, ip), 30);
+  check('pontos negativos não tiram dias', inat.forgivenessDays(-500, ip), 0);
+
+  const offline10 = new Date(Date.now() - 10 * 86_400_000);
+  const novato = inat.evaluate({ username: 'Novato', lastJoin: offline10, online: false }, 0, ip);
+  const veterano = inat.evaluate({ username: 'Veterano', lastJoin: offline10, online: false }, 1000, ip);
+  check('novato com 10d offline já pode ser expulso', novato.kickable, true);
+  check('veterano com 10d offline está protegido', veterano.kickable, false);
+  check('online nunca é expulsável', inat.evaluate({ username: 'On', lastJoin: offline10, online: true }, 0, ip).kickable, false);
+  check('sem lastJoin não é expulsável', inat.evaluate({ username: '?', lastJoin: null, online: false }, 0, ip).kickable, false);
+
+  section('7. Ordenação de cargos (peakRank)');
   check('capitão > recruta', gd.isHigherRank('captain', 'recruit'), true);
   check('recruta não > capitão', gd.isHigherRank('recruit', 'captain'), false);
   check('capitão > nenhum cargo', gd.isHigherRank('captain', undefined), true);
   check('capitão não > capitão', gd.isHigherRank('captain', 'captain'), false);
 
   // -------------------------------------------------------- Livro-razão
-  section('7. Pontos derivam do histórico (banco descartável)');
+  section('8. Pontos derivam do histórico (banco descartável)');
   const { connectMongo, closeMongo, collections, getDb } = await import('../src/db/mongo.js');
   const { setParam } = await import('../src/config/guildConfig.js');
   const P = await import('../src/services/points.js');
@@ -125,18 +145,42 @@ async function main() {
     const pts = async (uuid) => (await collections.guildStats().findOne({ uuid }))?.points;
     const gid = process.env.DISCORD_GUILD_ID;
 
-    await P.recomputePoints();
-    check('Alice 3 guerras x10 = 30', await pts('uuid-a'), 30);
-    check('Bob 2 gr + 5M + captura x2.2 = 79', await pts('uuid-b'), 79);
+    // Tabela oficial: 1M xp = 1 pt · graid = 10 · war = 10 × mult · weekly = 30 × streak
+    const base = { war: 10, raid: 0, guildRaid: 10, weekly: 30, contribPerMillion: 1, territoryBase: 10 };
+    const wp = (extra = {}) => ({ type: 'weekly', qty: 1, meta: { streak: 1 }, ...extra });
 
-    await setParam(gid, 'pointsWeights', { war: 20, raid: 5, guildRaid: 15, contribPerMillion: 1, territoryBase: 20 });
+    check('1M de XP = 1 ponto', P.eventPoints({ type: 'contribution', qty: 1_000_000 }, { pointsWeights: base }), 1);
+    check('1 guild raid = 10 pontos', P.eventPoints({ type: 'guildRaid', qty: 1 }, { pointsWeights: base }), 10);
+    check('raid comum não pontua', P.eventPoints({ type: 'raid', qty: 5 }, { pointsWeights: base }), 0);
+
+    // Guerra = base 10; captura paga só o excedente. Somados, dão 10 × mult.
+    const capParams = { pointsWeights: base, territoryMultiplierCap: 8 };
+    const guerra = P.eventPoints({ type: 'war', qty: 1 }, capParams);
+    const excedente = P.eventPoints({ type: 'territory', qty: 2.2 }, capParams);
+    check('guerra sozinha = 10', guerra, 10);
+    check('captura x2.2 paga só o excedente = 12', Number(excedente.toFixed(2)), 12);
+    check('guerra + captura = 10 × 2.2 = 22', Number((guerra + excedente).toFixed(2)), 22);
+    check('captura sem fronteiras (x1.0) não dá bônus', P.eventPoints({ type: 'territory', qty: 1 }, capParams), 0);
+
+    // Weekly: 30 base, +10% por semana seguida, teto +100%.
+    const wParams = { pointsWeights: base, weeklyStreakBonusPerWeek: 0.1, weeklyStreakBonusMax: 1 };
+    check('weekly streak 1 = 30', P.eventPoints(wp(), wParams), 30);
+    check('weekly streak 3 = 30 × 1.2 = 36', Number(P.eventPoints(wp({ meta: { streak: 3 } }), wParams).toFixed(2)), 36);
+    check('weekly streak 11 = 30 × 2.0 = 60 (teto)', P.eventPoints(wp({ meta: { streak: 11 } }), wParams), 60);
+    check('weekly streak 50 continua 60 (teto)', P.eventPoints(wp({ meta: { streak: 50 } }), wParams), 60);
+
+    await P.recomputePoints();
+    check('Alice 3 guerras × 10 = 30', await pts('uuid-a'), 30);
+    check('Bob: 2 graid(20) + 5M(5) + excedente(12) = 37', await pts('uuid-b'), 37);
+
+    await setParam(gid, 'pointsWeights', { ...base, war: 20 });
     await P.recomputePoints();
     check('peso 10→20 reescreve o passado da Alice', await pts('uuid-a'), 60);
-    check('e não mexe no Bob', await pts('uuid-b'), 79);
+    check('e não mexe no Bob', await pts('uuid-b'), 37);
 
     await setParam(gid, 'territoryMultiplierCap', 1.5);
     await P.recomputePoints();
-    check('teto 8→1.5 reescreve só a captura do Bob', await pts('uuid-b'), 65);
+    check('teto 8→1.5 reescreve só a captura do Bob', await pts('uuid-b'), 30);
 
     const dup = await P.recordEvent({ ...A, type: 'war', qty: 3, meta: { snapshotAt: snapAt } });
     await P.recomputePoints();
@@ -145,6 +189,7 @@ async function main() {
 
     await P.awardPoints('uuid-a', 'Alice', 25, 'evento');
     check('concessão manual vale na hora', await pts('uuid-a'), 85);
+    await setParam(gid, 'territoryMultiplierCap', 8); // restaura para as seções seguintes
 
     await P.rebuildLeaderboards();
     const lb = await P.pointsLeaderboard('alltime');
@@ -152,7 +197,7 @@ async function main() {
     check('leaderboard tem data de apuração', !!lb.builtAt, true);
 
     // ------------------------------------------ Leaderboards por categoria
-    section('8. Leaderboards por categoria (números crus)');
+    section('9. Leaderboards por categoria (números crus)');
     await collections.guildStats().updateOne({ uuid: 'uuid-a' }, { $set: { guildWars: 40, contributed: 9_000_000, guildRaids: 1, weeklyObjectives: 7 } });
     await collections.guildStats().updateOne({ uuid: 'uuid-b' }, { $set: { guildWars: 5, contributed: 50_000_000, guildRaids: 12, weeklyObjectives: 2 } });
     await P.rebuildLeaderboards();
@@ -174,7 +219,7 @@ async function main() {
     check('nunca mais de 15 linhas', painel.embeds[0].description.split('\n').length <= 15, true);
 
     // ---------------------------------------------------- Banimentos
-    section('9. Banimento pega UUID e Discord, e é permanente');
+    section('10. Banimento pega UUID e Discord, e é permanente');
     const B2 = await import('../src/services/bans.js');
     await B2.recordBan({ uuid: 'uuid-gsw', username: 'Fulano', discordId: 'discord-1', reason: 'teste' });
 
@@ -202,7 +247,7 @@ async function main() {
     check('depois de remover, não está banido', await B2.isBanned({ uuid: 'uuid-gsw' }), false);
 
     // ------------------------------------------------ Season e off-season
-    section('10. Season do jogo e off-season');
+    section('11. Season do jogo e off-season');
     const WS = await import('../src/services/wynnSeason.js');
     const S = await import('../src/services/seasons.js');
 
@@ -236,7 +281,7 @@ async function main() {
     check('acumulado soma os dois = 100 pts', await pts('uuid-c'), 100);
 
     // -------------------------------------------------- Empréstimo vencido
-    section('11. Empréstimo vencido continua ativo e pode ser quitado');
+    section('12. Empréstimo vencido continua ativo e pode ser quitado');
     const { ACTIVE_STATUSES } = await import('../src/discord/commands/loan.js');
     const loans = collections.loans();
     const ontem = new Date(Date.now() - 86_400_000);
