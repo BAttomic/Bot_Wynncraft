@@ -21,6 +21,30 @@ import { log } from './util/log.js';
 
 let ready = false;
 
+/**
+ * Loga no Discord com backoff. O gateway às vezes responde 503 (indisponível),
+ * e sem retry esse hipo transiente derrubaria o processo no boot — o container
+ * reiniciaria e tentaria de novo, virando um crash-loop enquanto o Discord
+ * estivesse instável. Aqui a gente só espera e tenta de novo, sem morrer.
+ *
+ * @param {import('discord.js').Client} client
+ * @param {string} token
+ * @param {number} [tentativas]
+ */
+async function loginWithRetry(client, token, tentativas = 6) {
+  for (let i = 1; i <= tentativas; i += 1) {
+    try {
+      await client.login(token);
+      return;
+    } catch (e) {
+      if (i === tentativas) throw e;
+      const espera = Math.min(60_000, 2 ** i * 1000); // 2s, 4s, 8s… teto de 60s
+      log.warn(`Falha no login (tentativa ${i}/${tentativas}): ${e.message}. Nova tentativa em ${espera / 1000}s.`);
+      await new Promise((r) => setTimeout(r, espera));
+    }
+  }
+}
+
 async function main() {
   loadEnv();
   const token = required('DISCORD_TOKEN');
@@ -73,7 +97,7 @@ async function main() {
     dailyAt(verifyH, 0, 'verificationReport', () => runVerificationReport(client));
   });
 
-  await client.login(token);
+  await loginWithRetry(client, token);
 
   const shutdown = async () => {
     log.info('Encerrando...');

@@ -73,12 +73,19 @@ cp .env.example .env   # preencha os valores
 npm start
 ```
 
-Após subir, no Discord configure ao menos os cargos de rank e o canal de registro:
+Após subir, configure ao menos os cargos de classificação e o canal de registro:
 
 ```
-/config role key:community role:@Comunidade
-/config role key:chief role:@Chief
+/config role key:community    role:@Comunidade
+/config role key:guildMember  role:@Membros WnBR
+/config role key:banned       role:@BANIDO
 /config channel key:registration channel:#registro
+```
+
+Os cargos de liderança (votam nas candidaturas e podem usar `/forcelink`):
+
+```
+/config param key:voterRoles value:["<id_do_cargo>"]
 ```
 
 ## Deploy no Easypanel (VPS própria)

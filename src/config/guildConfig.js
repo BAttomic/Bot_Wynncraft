@@ -98,7 +98,7 @@ export const PARAM_KEYS = Object.freeze([
  * @property {PointsWeights}  pointsWeights
  * @property {number}         territoryMultiplierCap teto do multiplicador de captura
  * @property {'wynn'|'manual'} seasonMode           'wynn' acompanha a season do jogo
- * @property {string[]}       voterRoles            cargos do Discord que podem votar
+ * @property {string[]}       voterRoles            cargos de liderança: voto e /forcelink
  * @property {boolean}        announcePresence      anunciar online/offline e troca de mundo
  * @property {number}         reapplyCooldownHours  espera após reprovação
  * @property {number}         snapshotHourUTC       hora da apuração diária
@@ -132,7 +132,9 @@ const DEFAULT_PARAMS = Object.freeze({
   weeklyStreakBonusPerWeek: 0.1,
   weeklyStreakBonusMax: 1,
   seasonMode: 'wynn',
-  // Vazio = cai no rank do jogo (Owner + Chief), o comportamento antigo.
+  // Cargos de liderança: votam nas candidaturas E podem usar /forcelink.
+  // Vazio = cai no rank do jogo (Owner + Chief) para voto, e em Gerenciar
+  // Servidor para o /forcelink.
   voterRoles: Object.freeze([]),
   // Com 50+ membros isso são centenas de mensagens por dia. XP, nível, guerras e
   // season continuam sendo anunciados de qualquer forma.

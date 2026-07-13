@@ -145,43 +145,63 @@ async function notifyRecruitAlert(client, cfg, { player, kind, discordId }) {
     .catch(() => {});
 }
 
-// Vincula o nick ao Discord de quem clicou e devolve o texto de confirmação
-// (a interação já respondeu de forma ephemeral por quem chamou).
-export async function linkAndClassify(interaction, rawNick) {
+/**
+ * Núcleo do vínculo, agnóstico de quem disparou. Escreve o vínculo, aplica
+ * classificação/cargo/apelido e devolve o resultado — sem texto de UI.
+ *
+ * @param {object} args
+ * @param {import('discord.js').Client}       args.client
+ * @param {string}                            args.guildId
+ * @param {string}                            args.targetDiscordId  dono do vínculo
+ * @param {import('discord.js').GuildMember?} args.targetMember     para aplicar cargo/apelido
+ * @param {string}                            args.rawNick
+ * @param {string?}                           [args.actorId]  quem forçou (staff), se houver
+ * @param {boolean}                           [args.force]    sobrescreve vínculos conflitantes
+ * @returns {Promise<{ok: boolean, error?: string, kind?: string, roleId?: string|null, player?: object, replaced?: object|null}>}
+ */
+async function performLink({ client, guildId, targetDiscordId, targetMember, rawNick, actorId, force = false }) {
   const nick = rawNick.trim();
   if (!/^\w{1,20}$/.test(nick)) {
-    return 'Nick inválido. Use apenas letras, números e `_` (até 20 caracteres).';
+    return { ok: false, error: 'Nick inválido. Use apenas letras, números e `_` (até 20 caracteres).' };
   }
 
   const player = await wynn.player(nick).catch(() => null);
   if (!player || !player.uuid) {
-    return `Não encontrei o jogador **${nick}** na API do WynnCraft. Confira a escrita do nick e tente de novo.`;
+    return { ok: false, error: `Não encontrei o jogador **${nick}** na API do WynnCraft. Confira a escrita do nick.` };
   }
 
   const members = collections.members();
-
   const byUuid = await members.findOne({ uuid: player.uuid });
-  if (byUuid && byUuid.discordId !== interaction.user.id) {
-    return 'Essa conta do WynnCraft já está vinculada a outro usuário. Fale com a staff se for engano.';
+  const byDiscord = await members.findOne({ discordId: targetDiscordId });
+
+  // Conflitos: no fluxo normal são erro; no forçado, a staff assume e sobrescreve.
+  if (byUuid && byUuid.discordId !== targetDiscordId && !force) {
+    return { ok: false, error: 'Essa conta do WynnCraft já está vinculada a outro usuário. Fale com a staff se for engano.' };
+  }
+  if (byDiscord && byDiscord.uuid !== player.uuid && !force) {
+    return { ok: false, error: `Seu Discord já está vinculado a **${byDiscord.username}**. Peça à staff um \`/unlink\` para trocar.` };
   }
 
-  const byDiscord = await members.findOne({ discordId: interaction.user.id });
-  if (byDiscord && byDiscord.uuid !== player.uuid) {
-    return `Seu Discord já está vinculado a **${byDiscord.username}**. Peça à staff um \`/unlink\` para trocar.`;
+  // Ao forçar sobre conflitos, apaga os vínculos antigos para não colidir com os
+  // índices únicos (uuid, discordId) na hora do upsert.
+  const replaced = [];
+  if (force) {
+    if (byUuid && byUuid.discordId !== targetDiscordId) replaced.push(byUuid);
+    if (byDiscord && byDiscord.uuid !== player.uuid) replaced.push(byDiscord);
+    for (const doc of replaced) await members.deleteOne({ _id: doc._id });
   }
 
   // A lista de banidos vem antes da guilda: quem já foi banido continua banido,
-  // mesmo que hoje esteja sem guilda ou até dentro da nossa. E o registro é
-  // reforçado com o par (uuid, discord) desta tentativa, então trocar de conta
-  // do Minecraft ou de Discord só amplia a teia em vez de escapar dela.
-  const priorBan = await findBan({ uuid: player.uuid, discordId: interaction.user.id });
+  // mesmo que hoje esteja sem guilda ou dentro da nossa. E cada tentativa reforça
+  // o par (uuid, discord), então trocar de conta ou de Discord só amplia a teia.
+  const priorBan = await findBan({ uuid: player.uuid, discordId: targetDiscordId });
   let kind = classifyPlayer(player);
   if (priorBan || kind === 'banned') {
     kind = 'banned';
     await recordBan({
       uuid: player.uuid,
       username: player.username,
-      discordId: interaction.user.id,
+      discordId: targetDiscordId,
       reason: priorBan?.reason ?? BAN_REASON_BLACKLIST_GUILD,
     });
   }
@@ -193,7 +213,7 @@ export async function linkAndClassify(interaction, rawNick) {
 
   const set = {
     uuid: player.uuid,
-    discordId: interaction.user.id,
+    discordId: targetDiscordId,
     username: player.username,
     inGuild: kind === 'member',
     guildRank: rank,
@@ -206,46 +226,82 @@ export async function linkAndClassify(interaction, rawNick) {
 
   await members.updateOne(
     { uuid: player.uuid },
-    {
-      $set: set,
-      $setOnInsert: { linkedAt: now, communitySince: now, guildWars: 0 },
-    },
+    { $set: set, $setOnInsert: { linkedAt: now, communitySince: now, guildWars: 0 } },
     { upsert: true },
   );
 
-  const cfg = await getConfig(interaction.guildId);
+  const cfg = await getConfig(guildId);
   let roleId = null;
-  if (interaction.member?.roles?.add) {
-    roleId = await applyClassificationRoles(interaction.member, cfg, kind);
-    await syncNickname(interaction.member, player.username);
+  if (targetMember?.roles?.add) {
+    roleId = await applyClassificationRoles(targetMember, cfg, kind);
+    await syncNickname(targetMember, player.username);
   }
 
-  await notifyRecruitAlert(interaction.client, cfg, {
-    player,
-    kind,
-    discordId: interaction.user.id,
-  });
-  // Banimento não deixa rastro nem no log: o canal tem leitores demais.
+  await notifyRecruitAlert(client, cfg, { player, kind, discordId: targetDiscordId });
+
+  // Banimento não deixa rastro no log: o canal tem leitores demais.
   if (kind !== 'banned') {
-    await audit(
-      interaction.client,
-      interaction.guildId,
-      `🔗 <@${interaction.user.id}> vinculou **${player.username}** → ${KIND_LABEL[kind]}.`,
-    );
+    const quem = actorId
+      ? `🔗 <@${actorId}> vinculou **forçadamente** <@${targetDiscordId}> → **${player.username}** (${KIND_LABEL[kind]}).`
+      : `🔗 <@${targetDiscordId}> vinculou **${player.username}** → ${KIND_LABEL[kind]}.`;
+    await audit(client, guildId, quem);
   }
 
-  // O banimento é SILENCIOSO. Quem cai na black-list vê uma confirmação comum,
-  // sem citar o cargo, a GsW ou o motivo — e sem sugerir /apply, que só chamaria
-  // atenção. Quem precisa saber (staff) é avisado no canal de recrutadores e no
-  // log de auditoria, que o banido não enxerga.
-  const roleNote = roleId && kind !== 'banned' ? ` Cargo <@&${roleId}> aplicado.` : '';
-  if (kind === 'banned') {
-    return `Conta **${player.username}** vinculada com sucesso!`;
+  return { ok: true, kind, roleId, player, replaced: replaced[0] ?? null };
+}
+
+// Vincula o nick ao Discord de quem clicou e devolve o texto de confirmação
+// (a interação já respondeu de forma ephemeral por quem chamou).
+export async function linkAndClassify(interaction, rawNick) {
+  const res = await performLink({
+    client: interaction.client,
+    guildId: interaction.guildId,
+    targetDiscordId: interaction.user.id,
+    targetMember: interaction.member,
+    rawNick,
+  });
+  if (!res.ok) return res.error;
+
+  // O banimento é SILENCIOSO: confirmação comum, sem citar cargo, GsW ou motivo,
+  // e sem sugerir candidatura, que só chamaria atenção.
+  const roleNote = res.roleId && res.kind !== 'banned' ? ` Cargo <@&${res.roleId}> aplicado.` : '';
+  if (res.kind === 'banned') {
+    return `Conta **${res.player.username}** vinculada com sucesso!`;
   }
-  if (kind === 'member') {
-    return `Conta **${player.username}** vinculada! Bem-vindo de volta, membro da **Wynn Brasil**.${roleNote}`;
+  if (res.kind === 'member') {
+    return `Conta **${res.player.username}** vinculada! Bem-vindo de volta, membro da **Wynn Brasil**.${roleNote}`;
   }
-  return `Conta **${player.username}** vinculada! Quer entrar na guilda? Vá ao canal de recrutamento e clique em **Enviar candidatura**.${roleNote}`;
+  return `Conta **${res.player.username}** vinculada! Quer entrar na guilda? Vá ao canal de recrutamento e clique em **Enviar candidatura**.${roleNote}`;
+}
+
+/**
+ * Vínculo forçado pela staff: registra `targetDiscordId` na conta `rawNick`,
+ * sobrescrevendo vínculos conflitantes. Devolve um resumo para a staff.
+ * @returns {Promise<string>}
+ */
+export async function forceLink({ interaction, targetUser, targetMember, rawNick }) {
+  const res = await performLink({
+    client: interaction.client,
+    guildId: interaction.guildId,
+    targetDiscordId: targetUser.id,
+    targetMember,
+    rawNick,
+    actorId: interaction.user.id,
+    force: true,
+  });
+  if (!res.ok) return res.error;
+
+  const linhas = [
+    `Vínculo forçado: <@${targetUser.id}> → **${res.player.username}**.`,
+    `Classificação: **${KIND_LABEL[res.kind] ?? 'BANIDO'}**${res.roleId && res.kind !== 'banned' ? ` · cargo <@&${res.roleId}> aplicado` : ''}.`,
+  ];
+  if (res.replaced) {
+    linhas.push(`⚠️ Substituiu o vínculo anterior de **${res.replaced.username}** (<@${res.replaced.discordId}>).`);
+  }
+  if (!targetMember) {
+    linhas.push('⚠️ O usuário não está no servidor, então nenhum cargo foi aplicado — só o registro no banco.');
+  }
+  return linhas.join('\n');
 }
 
 export function panelPayload() {

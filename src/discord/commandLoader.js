@@ -20,8 +20,9 @@ import membros from './commands/membros.js';
 import registro from './commands/registro.js';
 import missao from './commands/missao.js';
 import ban from './commands/ban.js';
+import forcelink from './commands/forcelink.js';
 
-const commands = [link, unlink, config, apply, season, leaderboard, profile, war, tome, loan, calc, points, verificar, membros, registro, missao, ban];
+const commands = [link, unlink, config, apply, season, leaderboard, profile, war, tome, loan, calc, points, verificar, membros, registro, missao, ban, forcelink];
 const byName = new Map(commands.map((c) => [c.data.name, c]));
 
 export async function registerCommands() {
