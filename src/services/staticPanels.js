@@ -230,7 +230,7 @@ function tomePayload() {
 `Regras e requisitos para receber o **Guild Tome**.
 
 ### Requisitos
-> Ter pelo menos uma classe de nível \`120\`.
+> Ter pelo menos uma classe de nível \`105\`.
 > Ter completado a quest \`Realm of Light I - The Worm Holes\`.
 > Ser membro da guilda há pelo menos \`1 semana\`.
 

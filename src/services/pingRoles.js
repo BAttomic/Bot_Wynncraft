@@ -45,6 +45,8 @@ export const PING_GROUPS = Object.freeze([
     title: '1. Pings de Experiência (XP)',
     roles: [
       { name: 'PING GUILD XP' },
+      { name: 'PING XP - Fruma Lighthouse (115+)' },
+      { name: 'PING XP - Fruma BatCave (107+)' },
       { id: '1268213746585698375' }, // Lutho Witness Church (100+)
       { id: '1268211113942847603' }, // Corkus Scrapyard (85+)
       { id: '1268209833090486423' }, // Cinfras Waterfall (75-85)
@@ -53,8 +55,6 @@ export const PING_GROUPS = Object.freeze([
       { id: '1268208726058205245' }, // Troms Herb Cave (50-65)
       { id: '1268208320452235306' }, // Almuj Desert Altar (35-50)
       { id: '1268208320343445516' }, // Nemract Saint's Row (20-35)
-      { name: 'PING XP - Fruma Lighthouse (115+)' },
-      { name: 'PING XP - Fruma BatCave (107+)' },
     ],
   },
   {
