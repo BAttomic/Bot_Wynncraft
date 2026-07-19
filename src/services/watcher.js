@@ -7,6 +7,7 @@ import { shortNumber, membersLimit, calcExperience, getByPath, diffPaths } from 
 import { xpBarEmoji } from '../util/emojis.js';
 import { captureValue, recordCapture } from './territories.js';
 import { recordEvent, eventPoints } from './points.js';
+import { downloadsRow } from './leaderboardPanel.js';
 import { log } from '../util/log.js';
 
 const territoryMap = JSON.parse(
@@ -216,7 +217,7 @@ function buildPanel(client, guild) {
 `**🎉 Nível:** \`${guild.level} (${guild.xpPercent}%)\` — \`${shortNumber(Math.floor(currXp))}/${shortNumber(Math.floor(reqXp))}\`
 ${xpBarEmoji(guild.xpPercent)}
 **🚧 Territórios:** \`${guild.territories}\`
-**⚔ Guerras:** \`${guild.wars}\`
+**⚔️ Guerras:** \`${guild.wars}\`
 **🤙 Membros:** \`${guild.members.total}/${membersLimit(guild.level)}\`
 
 **Online (${online.length}/${guild.members.total}):**
@@ -226,6 +227,7 @@ ${list}
         footer: { text: 'WnBR — Informações', iconURL: client.user.displayAvatarURL() },
       },
     ],
+    components: [downloadsRow()],
   };
 }
 

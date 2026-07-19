@@ -135,9 +135,19 @@ async function handleInvited(interaction, appId) {
   if (!app) {
     return interaction.reply({ content: 'Candidatura não encontrada.', ephemeral: true });
   }
+  // Guarda a mensagem de anúncio (o próprio card do "Convidado") para o job de
+  // limpeza apagá-la 24h após o convite.
   await apps.updateOne(
     { _id },
-    { $set: { status: 'invited', invitedBy: interaction.user.id, invitedAt: new Date() } },
+    {
+      $set: {
+        status: 'invited',
+        invitedBy: interaction.user.id,
+        invitedAt: new Date(),
+        announceChannelId: interaction.channelId,
+        announceMessageId: interaction.message.id,
+      },
+    },
   );
   const e = interaction.message.embeds[0];
   await interaction.update({

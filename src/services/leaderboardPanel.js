@@ -6,9 +6,15 @@ import { pointsLeaderboard, categoryLeaderboard, CATEGORIES } from './points.js'
 import { allowanceDays, forgivenessDays, daysOffline } from './inactivity.js';
 import { wynn } from '../wynn/api.js';
 import { shortNumber } from '../util/format.js';
+import { PECAS, anexo } from '../discord/commands/uniforme.js';
 
 export const SELECT_ID = 'lb:view';
 export const ME_ID = 'lb:me';
+/** Botões de download das peças oficiais, no painel de status. */
+export const SKIN_ID = 'lb:skin';
+export const CAPE_ID = 'lb:cape';
+/** Convite do grupo de WhatsApp da comunidade (botão-link). */
+const WHATSAPP_URL = 'https://chat.whatsapp.com/DFwzI8rjMI02Akt5yLqTPj';
 const STATE_ID = 'leaderboardPanel';
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -107,6 +113,56 @@ function meRow() {
       .setEmoji('⭐')
       .setStyle(ButtonStyle.Primary),
   );
+}
+
+/**
+ * Segunda linha de botões do painel: baixar a skin da seleção (para sobrepor na
+ * sua própria skin) e a capa da guilda, mais o link do grupo de WhatsApp.
+ */
+export function downloadsRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(SKIN_ID)
+      .setLabel('Skin da Seleção')
+      .setEmoji('👕')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(CAPE_ID)
+      .setLabel('Capa da Guilda')
+      .setEmoji('🧣')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setLabel('Grupo WhatsApp')
+      .setEmoji('💬')
+      .setStyle(ButtonStyle.Link)
+      .setURL(WHATSAPP_URL),
+  );
+}
+
+/**
+ * Responde só a quem clicou, com o PNG anexado (baixável). A skin da seleção é
+ * uma skin transparente feita para ser sobreposta à sua no editor de skins.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {'uniforme' | 'capa'} peca
+ */
+export async function handleAssetDownload(interaction, peca) {
+  await interaction.deferReply({ ephemeral: true });
+  const { file, label } = PECAS[peca];
+  const dica =
+    peca === 'uniforme'
+      ? 'Baixe e **sobreponha na sua própria skin** num editor de skins (ex.: novaskin.me).'
+      : 'Capa oficial da guilda. Baixe e aplique no seu perfil.';
+  return interaction.editReply({
+    embeds: [
+      {
+        title: `🇧🇷 ${label}`,
+        description: `${dica}\n\nÉ só clicar na imagem para baixar.`,
+        color: 0x2ecc71,
+        image: { url: `attachment://${file}` },
+      },
+    ],
+    files: [anexo(peca)],
+  });
 }
 
 /**

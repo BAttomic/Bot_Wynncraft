@@ -5,13 +5,13 @@ import { SlashCommandBuilder, AttachmentBuilder } from 'discord.js';
  * Os arquivos ficam em src/assets/ (entram na imagem Docker; o .dockerignore
  * só exclui *.md e node_modules).
  */
-const PECAS = Object.freeze({
+export const PECAS = Object.freeze({
   uniforme: { file: 'Uniforme_Selecao.png', label: 'Uniforme da Seleção' },
   capa: { file: 'WnBR_Cape.png', label: 'Capa' },
 });
 
 /** Cria o anexo (baixável) de uma peça a partir de src/assets/. */
-function anexo(peca) {
+export function anexo(peca) {
   const { file } = PECAS[peca];
   return new AttachmentBuilder(new URL(`../../assets/${file}`, import.meta.url), { name: file });
 }

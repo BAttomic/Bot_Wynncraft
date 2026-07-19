@@ -14,6 +14,7 @@ import { ensureStaticPanels } from './services/staticPanels.js';
 import { ensurePingRolePanels, attachPingRoleHandler } from './services/pingRoles.js';
 import { ensureLeaderboardPanel } from './services/leaderboardPanel.js';
 import { runPingsCleanup } from './jobs/pingsCleanup.js';
+import { runRecruitCleanup } from './jobs/recruitCleanup.js';
 import { ensureActiveSeason } from './services/seasons.js';
 import { initErrorReport, reportError } from './services/errorReport.js';
 import { getConfig } from './config/guildConfig.js';
@@ -90,6 +91,7 @@ async function main() {
       await ensureLeaderboardPanel(client, guildId);
     }, { runOnStart: true });
     everyMinutes(60, 'pingsCleanup', () => runPingsCleanup(client), { runOnStart: true });
+    everyMinutes(30, 'recruitCleanup', () => runRecruitCleanup(client), { runOnStart: true });
     // Vira a season (ou entra em off-season) assim que o jogo virar.
     everyMinutes(60, 'seasonSync', () => ensureActiveSeason(), { runOnStart: true });
     everyMinutes(minutes, 'roleSync', () => runRoleSync(client), { runOnStart: true });

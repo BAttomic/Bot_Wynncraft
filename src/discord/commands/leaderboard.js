@@ -10,8 +10,11 @@ import {
 import {
   SELECT_ID,
   ME_ID,
+  SKIN_ID,
+  CAPE_ID,
   handleLeaderboardSelect,
   handleMyPoints,
+  handleAssetDownload,
   ensureLeaderboardPanel,
   renderPoints,
   renderCategory,
@@ -60,11 +63,13 @@ export default {
 
   // Componentes do painel fixo no canal de status.
   owns(interaction) {
-    return interaction.customId === SELECT_ID || interaction.customId === ME_ID;
+    return [SELECT_ID, ME_ID, SKIN_ID, CAPE_ID].includes(interaction.customId);
   },
 
   handleComponent(interaction) {
     if (interaction.customId === ME_ID) return handleMyPoints(interaction);
+    if (interaction.customId === SKIN_ID) return handleAssetDownload(interaction, 'uniforme');
+    if (interaction.customId === CAPE_ID) return handleAssetDownload(interaction, 'capa');
     return handleLeaderboardSelect(interaction);
   },
 

@@ -30,6 +30,8 @@ const COLOR = { rules: 0x5865f2, guild: 0x2ecc71, pings: 0xe67e22, recruit: 0x34
 const STAFF_ROLE = '1262574400587169863';
 const RECRUIT_CHANNEL = '1309848293278486578';
 const BOT_ID = '1285402380648583199';
+// Canal de pings (reaction-role). Substituiu o antigo menu nativo <id:customize>.
+const PINGS_CHANNEL = '1524986783694065736';
 
 // Menções cruas nunca pingam ninguém num painel fixo.
 const SILENT = { allowedMentions: { parse: [] } };
@@ -86,7 +88,7 @@ function rulesPayload(params) {
 ### Observações Importantes
 - Caso presencie comportamento inadequado, denuncie aos moderadores.
 - Violações podem resultar em advertências, suspensões ou banimentos, dependendo da gravidade.
-- Escolha seus cargos de notificação no canal de pings, reagindo nas mensagens. Isso ajuda na organização da guilda e na comunicação sobre eventos.
+- Escolha seus cargos de notificação em <#${PINGS_CHANNEL}>, reagindo nas mensagens. Isso ajuda na organização da guilda e na comunicação sobre eventos.
 
 -# Divirta-se e boas aventuras em Wynncraft!`,
       },
@@ -153,7 +155,7 @@ function recruitPayload() {
 > Aprovado? Um recrutador te chama no jogo. Aceite digitando \`/guild join WnBR\` **dentro do Wynncraft**.
 
 **4️⃣ Escolha seus cargos**
-> Passe no canal de pings e reaja nas mensagens para marcar seus interesses. Isso ajuda na sua integração.
+> Passe em <#${PINGS_CHANNEL}> e reaja nas mensagens para marcar seus interesses. Isso ajuda na sua integração.
 
 Assim que entrar na guilda, o bot te dá o cargo de membro sozinho — em até 10 minutos, sem precisar avisar ninguém.
 
