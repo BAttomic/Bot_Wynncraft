@@ -4,9 +4,10 @@ import { collections } from '../db/mongo.js';
 import { getConfig } from '../config/guildConfig.js';
 import { optional } from '../config/env.js';
 import { shortNumber, membersLimit, calcExperience, getByPath, diffPaths } from '../util/format.js';
-import { xpBarEmoji } from '../util/emojis.js';
+import { xpBarEmoji, EMOJI } from '../util/emojis.js';
 import { captureValue, recordCapture } from './territories.js';
 import { recordEvent, eventPoints } from './points.js';
+import { communityRow } from './leaderboardPanel.js';
 import { logoAttachment, brandWithLogo } from '../util/assets.js';
 import { log } from '../util/log.js';
 
@@ -217,7 +218,7 @@ function buildPanel(client, guild) {
 `**🎉 Nível:** \`${guild.level} (${guild.xpPercent}%)\` — \`${shortNumber(Math.floor(currXp))}/${shortNumber(Math.floor(reqXp))}\`
 ${xpBarEmoji(guild.xpPercent)}
 **🚧 Territórios:** \`${guild.territories}\`
-**🏹 Guerras:** \`${guild.wars}\`
+**${EMOJI.war} Guerras:** \`${guild.wars}\`
 **🤙 Membros:** \`${guild.members.total}/${membersLimit(guild.level)}\`
 
 **Online (${online.length}/${guild.members.total}):**
@@ -227,9 +228,8 @@ ${list}
         footer: { text: 'WnBR — Informações', iconURL: client.user.displayAvatarURL() },
       },
     ],
-    // Sem botões: skin, capa e modpack agora vivem no painel de downloads.
-    // `[]` (e não omitir) para LIMPAR os botões antigos ao editar no lugar.
-    components: [],
+    // Skin, capa e modpack vivem no painel de downloads; aqui fica só o WhatsApp.
+    components: [communityRow()],
   });
 }
 

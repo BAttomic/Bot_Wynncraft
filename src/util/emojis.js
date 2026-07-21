@@ -17,6 +17,9 @@ const DEFAULTS = {
   LIQUID_EMERALD: '<:LiquidEmerald:1328487792950644897>',
   EMERALD_BLOCK: '<:EmeraldBlock:1328487765238747136>',
   EMERALD: '<:Emerald:1328487728765079555>',
+  // Emote de guerra do servidor. Defina EMOJI_WAR=<:nome:id> (ou <a:nome:id> se
+  // animado). Fallback Unicode enquanto não configurado.
+  WAR: '⚔️',
   // A barra de XP não tem emoji customizado; quadrados Unicode sempre renderizam.
   BAR_FULL: '🟩',
   BAR_EMPTY: '⬛',
@@ -36,6 +39,10 @@ export const EMOJI = {
       eb: e('EMERALD_BLOCK', DEFAULTS.EMERALD_BLOCK),
       em: e('EMERALD', DEFAULTS.EMERALD),
     };
+  },
+  /** @returns {string} emote de guerra (customizado via EMOJI_WAR, ou ⚔️). */
+  get war() {
+    return e('WAR', DEFAULTS.WAR);
   },
   /** @returns {BarEmojis} */
   get bar() {

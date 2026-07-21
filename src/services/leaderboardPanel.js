@@ -129,8 +129,9 @@ export async function handleAssetDownload(interaction, peca) {
   const { file, label } = PECAS[peca];
   const description =
     peca === 'uniforme'
-      ? 'Baixe a imagem abaixo (clique nela) e **sobreponha na sua própria skin** ' +
-        'num editor de skins (ex.: novaskin.me).'
+      ? 'Esta é uma **camada (overlay) transparente**, não uma skin pronta. ' +
+        'Baixe a imagem abaixo (clique nela) e, num editor de skins (ex.: novaskin.me), ' +
+        '**sobreponha-a à sua própria skin** para montar seu uniforme.'
       : 'Baixe a capa abaixo (clique na imagem) e aplique com o **Wynntils**:\n' +
         '1. No jogo, com o **Wynntils** instalado, rode `/wynntils token`.\n' +
         '2. Vai aparecer um **link no chat do jogo** — clique nele para abrir seu ' +
@@ -259,14 +260,20 @@ function downloadsPanelPayload() {
           .setLabel('Modpack')
           .setEmoji('📦')
           .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setLabel('Grupo WhatsApp')
-          .setEmoji('💬')
-          .setStyle(ButtonStyle.Link)
-          .setURL(WHATSAPP_URL),
       ),
     ],
   });
+}
+
+/** Linha com o convite do grupo de WhatsApp — fica no painel de info (ao vivo). */
+export function communityRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel('Grupo WhatsApp')
+      .setEmoji('💬')
+      .setStyle(ButtonStyle.Link)
+      .setURL(WHATSAPP_URL),
+  );
 }
 
 /**
